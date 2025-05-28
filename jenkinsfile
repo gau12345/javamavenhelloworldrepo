@@ -1,0 +1,59 @@
+pipeline {
+    agent any
+    tools {
+        maven 'maven'  // Matches name in Global Tool Configuration
+        jdk 'jdk'       // Matches name in Global Tool Configuration
+    }
+    environment {
+        DOCKER_IMAGE = 'gautadas/myfirstjavamavenwebapp'
+        DOCKER_TAG = 'v1.0.0'  // Uses build number for unique tag
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                git url: 'https://github.com/gau12345/javamavenhelloworldrepo.git', 
+                    branch: 'main', 
+                     
+            }
+        }
+        stage('Build Maven Project') {
+            steps {
+                sh 'mvn clean package -DskipTests'
+            }
+        }
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    // Build Docker image
+                    docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}")
+                }
+            }
+        }
+        stage('Load Image to Minikube') {
+            steps {
+                script {
+                    // Point to Minikube's Docker daemon and load the image
+                    sh 'eval $(minikube docker-env)'
+                    sh "docker save ${DOCKER_IMAGE}:${DOCKER_TAG} | minikube image load -"
+                }
+            }
+        }
+        stage('Deploy to Minikube') {
+            steps {
+                script {
+                    // Apply Kubernetes deployment and service
+                    sh 'kubectl apply -f k8s-manifest/deployment.yaml'
+                    sh 'kubectl apply -f k8s-manifest/service.yaml'
+                }
+            }
+        }
+    }
+    post {
+        success {
+            echo 'Deployment to Minikube completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
+        }
+    }
+}
